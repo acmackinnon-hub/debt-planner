@@ -1,12 +1,24 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { buildPlan, type Debt, type Strategy } from "./lib/debt";
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
+const STORAGE_KEY = "debt_planner_v1";
 
+function loadSavedState() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 export default function Home() {
   const [mounted, setMounted] = useState(false);
 
@@ -22,9 +34,41 @@ useEffect(() => {
   const [debts, setDebts] = useState<Debt[]>([
     { id: uid(), name: "Credit Card", balance: 5000, apr: 19.99, minPayment: 200 },
   ]);
+  const didLoad = useRef(false);
+useEffect(() => {
+  const saved = loadSavedState();
+  if (!saved) return;
+
+  if (typeof saved.isPro === "boolean") setIsPro(saved.isPro);
+  if (saved.strategy) setStrategy(saved.strategy);
+  if (typeof saved.extraMonthly === "number")
+    setExtraMonthly(saved.extraMonthly);
+  if (Array.isArray(saved.debts))
+    setDebts(saved.debts);
+  didLoad.current = true;
+}, []);
 
   const maxDebtsAllowed = isPro ? 50 : 1;
   const overLimit = debts.length > maxDebtsAllowed;
+
+  useEffect(() => {
+  // don't save until we've attempted to load once
+  if (!didLoad.current) return;
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        isPro,
+        strategy,
+        extraMonthly,
+        debts,
+      })
+    );
+  } catch {
+    // ignore write errors
+  }
+}, [isPro, strategy, extraMonthly, debts]);
 
   const result = useMemo(() => {
     // In free mode, only calculate using first debt
